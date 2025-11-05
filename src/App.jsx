@@ -5,9 +5,20 @@ import MockTester from './components/MockTester.jsx';
 import AIGenerator from './components/AIGenerator.jsx';
 import { Rocket } from 'lucide-react';
 
+const safeId = (prefix) => {
+  try {
+    if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
+      return `${prefix}_${globalThis.crypto.randomUUID()}`;
+    }
+  } catch (_) {}
+  return `${prefix}_${Math.random().toString(36).slice(2)}${Date.now()}`;
+};
+
+const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
+
 function createEndpoint(name = 'New Endpoint') {
   return {
-    id: `ep_${crypto.randomUUID()}`,
+    id: safeId('ep'),
     type: 'endpoint',
     name,
     method: 'GET',
@@ -19,14 +30,15 @@ function createEndpoint(name = 'New Endpoint') {
 }
 
 function createFolder(name = 'New Folder') {
-  return { id: `fd_${crypto.randomUUID()}`, type: 'folder', name, children: [] };
+  return { id: safeId('fd'), type: 'folder', name, children: [] };
 }
 
-function findNodeAndParent(tree, id, parent = null) {
-  for (const node of tree) {
-    if (node.id === id) return { node, parent, index: tree.indexOf(node), list: tree };
-    if (node.type === 'folder') {
-      const found = findNodeAndParent(node.children || [], id, node);
+function findNodeAndParent(tree, id, parent = null, list = tree) {
+  for (let i = 0; i < list.length; i++) {
+    const node = list[i];
+    if (node.id === id) return { node, parent, index: i, list };
+    if (node.type === 'folder' && node.children?.length) {
+      const found = findNodeAndParent(tree, id, node, node.children);
       if (found) return found;
     }
   }
@@ -42,8 +54,8 @@ export default function App() {
     const walk = (list) => {
       for (const n of list) {
         if (n.id === selectedId) return n;
-        if (n.type === 'folder') {
-          const found = walk(n.children || []);
+        if (n.type === 'folder' && n.children?.length) {
+          const found = walk(n.children);
           if (found) return found;
         }
       }
@@ -55,7 +67,7 @@ export default function App() {
   const addRootFolder = () => setTree((t) => [...t, createFolder('Group')]);
   const addRootEndpoint = () => setTree((t) => [...t, createEndpoint('Endpoint')]);
   const addFolder = (parentId) => setTree((t) => {
-    const next = structuredClone(t);
+    const next = deepClone(t);
     const found = findNodeAndParent(next, parentId);
     if (found && found.node.type === 'folder') {
       found.node.children.push(createFolder('Group'));
@@ -63,7 +75,7 @@ export default function App() {
     return next;
   });
   const addEndpoint = (parentId) => setTree((t) => {
-    const next = structuredClone(t);
+    const next = deepClone(t);
     const found = findNodeAndParent(next, parentId);
     if (found && found.node.type === 'folder') {
       found.node.children.push(createEndpoint('Endpoint'));
@@ -71,25 +83,21 @@ export default function App() {
     return next;
   });
   const deleteNode = (id) => setTree((t) => {
-    const next = structuredClone(t);
+    const next = deepClone(t);
     const info = findNodeAndParent(next, id);
     if (!info) return t;
-    if (info.parent) {
-      info.parent.children.splice(info.parent.children.findIndex((c) => c.id === id), 1);
-    } else {
-      next.splice(info.index, 1);
-    }
+    info.list.splice(info.index, 1);
     if (selectedId === id) setSelectedId(null);
     return next;
   });
   const renameNode = (id, name) => setTree((t) => {
-    const next = structuredClone(t);
+    const next = deepClone(t);
     const info = findNodeAndParent(next, id);
     if (info) info.node.name = name;
     return next;
   });
   const updateEndpoint = (id, patch) => setTree((t) => {
-    const next = structuredClone(t);
+    const next = deepClone(t);
     const info = findNodeAndParent(next, id);
     if (info && info.node.type === 'endpoint') {
       Object.assign(info.node, patch);
@@ -107,7 +115,7 @@ export default function App() {
 
   const onAIGenerate = ({ folder, endpoints }) => {
     setTree((t) => {
-      const next = structuredClone(t);
+      const next = deepClone(t);
       const newFolder = { ...folder, children: endpoints.map((e) => ({ ...createEndpoint(e.name), ...e })) };
       next.push(newFolder);
       return next;
@@ -144,7 +152,7 @@ export default function App() {
           <div className="border-r border-slate-200 bg-white min-h-0">
             <EndpointEditor
               endpoint={selectedNode?.type === 'endpoint' ? selectedNode : null}
-              onChange={(ep) => updateEndpoint(selectedNode?.id, ep)}
+              onChange={(ep) => selectedNode ? updateEndpoint(selectedNode.id, ep) : null}
             />
           </div>
           <div className="grid grid-rows-2 min-h-0">
