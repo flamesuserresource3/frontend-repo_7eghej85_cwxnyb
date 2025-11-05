@@ -81,8 +81,8 @@ export default function EndpointEditor({ endpoint, onChange }) {
             <div className="font-medium mb-2">Mock Response (JSON)</div>
             <textarea
               className="w-full h-40 border rounded p-2 font-mono text-sm"
-              placeholder="{\n  \"id\": 1,\n  \"name\": \"Alice\"\n}"
-              value={endpoint.mockResponse}
+              placeholder='{"id": 1, "name": "Alice"}'
+              value={endpoint.mockResponse || ''}
               onChange={(e) => update({ mockResponse: e.target.value })}
             />
           </div>
